@@ -3,6 +3,7 @@
 [![License](https://img.shields.io/github/license/WenchaoHuang/Nucleus)](LICENSE)
 [![Build (Linux)](https://github.com/WenchaoHuang/Nucleus/actions/workflows/build-linux.yml/badge.svg)](https://github.com/WenchaoHuang/Nucleus/actions/workflows/build-linux.yml)
 [![Build (Windows)](https://github.com/WenchaoHuang/Nucleus/actions/workflows/build-windows.yml/badge.svg)](https://github.com/WenchaoHuang/Nucleus/actions/workflows/build-windows.yml)
+[![GitHub Pages](https://img.shields.io/badge/docs-GitHub%20Pages-8cff56?logo=github)](https://wenchaohuang.github.io/nucleus/)
 [![GitHub commit activity](https://img.shields.io/github/commit-activity/y/WenchaoHuang/Nucleus/main)](https://github.com/WenchaoHuang/Nucleus/commits/main)
 
 > [!WARNING]
@@ -24,14 +25,16 @@ For OptiX ray-tracing functionality, see the companion [Photon](https://github.c
 
 ## Features
 
-- Device enumeration and properties via `ns::Context` and `ns::Device`
+- Device enumeration and properties via `ns::Runtime` and `ns::Device`
 - CUDA stream management with a fluent API (`stream.launch(…)(args…)`, `stream.memcpy(…)`, `stream.sync()`)
 - Typed 1-D, 2-D, and 3-D device arrays (`ns::Array<T>`, `ns::Array2D<T>`, `ns::Array3D<T>`)
 - Pluggable allocator interface (`ns::Allocator`, `ns::DeviceAllocator`, `ns::HostAllocator`)
+- Reusable temporary memory backed by a cached buffer (`ns::ScratchArena`)
 - CUDA events and timing (`ns::Event`, `ns::TimedEvent`, `ns::ScopedTimer`)
 - CUDA graph support with automatic topology caching and parameter update (`ns::Graph`)
 - Texture and surface objects with full dimensionality support (1-D/2-D/3-D, cubemap, layered, mipmapped)
 - Kernel-launch helpers: `ns::ceil_div`, `ns::align_up`, `CUDA_for` / `NS_BOUNDS_CHECK` bounds-check macros
+- `ns::Span<T>` — host-only compatibility patch that backports the C++26 `std::span` initializer-list behavior to C++20, including const views
 - Logger (`ns::Logger`) for structured diagnostic messages
 
 ## Prerequisites
@@ -40,7 +43,7 @@ For OptiX ray-tracing functionality, see the companion [Photon](https://github.c
 |---|---|
 | CUDA Toolkit | 11.0 |
 | CMake | 3.18 |
-| C++ compiler | C++17 (C++20 recommended) |
+| C++ compiler | C++20 |
 
 Nucleus is currently developed and tested on Linux and Windows (MSVC). Other platforms are not officially supported.
 
@@ -76,7 +79,6 @@ target_link_libraries(my_app PRIVATE nucleus)
 | `NUCLEUS_BUILD_SHARED_LIB` | `ON` | Build as a shared library; set to `OFF` for a static library |
 | `NUCLEUS_BUILD_TESTS` | `OFF` | Build the test suite (`tests/`) |
 | `NUCLEUS_BUILD_EXAMPLES` | `OFF` | Build the bundled examples (`examples/`) |
-| `NUCLEUS_CPP_STANDARD` | `20` | C++ standard to use (`17`, `20`, `23`, or `26`) |
 
 Example — build in static mode with tests and examples:
 
@@ -84,8 +86,7 @@ Example — build in static mode with tests and examples:
 cmake -B build \
   -DNUCLEUS_BUILD_SHARED_LIB=OFF \
   -DNUCLEUS_BUILD_TESTS=ON \
-  -DNUCLEUS_BUILD_EXAMPLES=ON \
-  -DNUCLEUS_CPP_STANDARD=20
+  -DNUCLEUS_BUILD_EXAMPLES=ON
 cmake --build build
 ```
 
@@ -105,7 +106,7 @@ Or include individual headers as needed (see [Project Structure](#project-struct
 
 ```cu
 // vector_add.cu  —  must be compiled with nvcc
-#include <nucleus/context.h>
+#include <nucleus/runtime.h>
 #include <nucleus/array_1d.h>
 #include <nucleus/launch_utils.cuh>  // .cuh — only in .cu files
 
@@ -113,42 +114,42 @@ Or include individual headers as needed (see [Project Structure](#project-struct
 // CUDA_for(i, count) expands to:
 //   const auto i = ns::tid(); if (i >= count) return;
 __global__ void add_kernel(dev::Ptr<int> out,
-                           dev::Ptr<const int> x,
-                           dev::Ptr<const int> y,
-                           unsigned int count)
+						   dev::Ptr<const int> x,
+						   dev::Ptr<const int> y,
+						   unsigned int count)
 {
-    CUDA_for(i, count);
-    out[i] = x[i] + y[i];
+	CUDA_for(i, count);
+	out[i] = x[i] + y[i];
 }
 
 int main()
 {
-    const int count = 1 << 20;
+	const int count = 1 << 20;
 
-    // Obtain device, allocator, and default stream from the context singleton.
-    auto * device    = ns::Context::getInstance()->device(0);
-    auto   allocator = device->defaultAllocator();
-    auto & stream    = device->defaultStream();
+	// Obtain device, allocator, and default stream from the runtime singleton.
+	auto * device    = ns::Runtime::device(0);
+	auto   allocator = device->defaultAllocator();
+	auto & stream    = device->defaultStream();
 
-    // Allocate typed device arrays (RAII — freed automatically).
-    ns::Array<int> A(allocator, count);
-    ns::Array<int> B(allocator, count);
-    ns::Array<int> C(allocator, count);
+	// Allocate typed device arrays (RAII — freed automatically).
+	ns::Array<int> A(allocator, count);
+	ns::Array<int> B(allocator, count);
+	ns::Array<int> C(allocator, count);
 
-    // Initialize device memory (type-safe typed fill).
-    stream.fill(A.data(), 1, A.size());
-    stream.fill(B.data(), 2, B.size());
+	// Initialize device memory (type-safe typed fill).
+	stream.fill(A.data(), 1, A.size());
+	stream.fill(B.data(), 2, B.size());
 
-    // Launch the kernel — grid size is computed with ceil_div.
-    constexpr int blockSize = 256;
-    stream.launch(add_kernel, ns::ceil_div(count, blockSize), blockSize)(C, A, B, count);
+	// Launch the kernel — grid size is computed with ceil_div.
+	constexpr int blockSize = 256;
+	stream.launch(add_kernel, ns::ceil_div(count, blockSize), blockSize)(C, A, B, count);
 
-    // Copy result back to host and synchronize.
-    std::vector<int> host_result(count);
-    stream.memcpy(host_result.data(), C.data(), C.size());
-    stream.sync();
+	// Copy result back to host and synchronize.
+	std::vector<int> host_result(count);
+	stream.memcpy(host_result.data(), C.data(), C.size());
+	stream.sync();
 
-    return 0;
+	return 0;
 }
 ```
 
@@ -160,11 +161,11 @@ int main()
 class MyPoolAllocator : public ns::DeviceAllocator
 {
 public:
-    explicit MyPoolAllocator(ns::Device * device) : ns::DeviceAllocator(device) {}
+	explicit MyPoolAllocator(ns::Device * device) : ns::DeviceAllocator(device) {}
 
 protected:
-    void * doAllocateMemory(size_t bytes) override { /* pool logic */ }
-    void   doDeallocateMemory(void * ptr)  override { /* pool logic */ }
+	void * doAllocateMemory(size_t bytes) override { /* pool logic */ }
+	void   doDeallocateMemory(void * ptr)  override { /* pool logic */ }
 };
 
 auto myAlloc = std::make_shared<MyPoolAllocator>(device);
@@ -183,14 +184,13 @@ stream.setForceSync(true);
 
 ## Core Concepts
 
-### `ns::Context`
+### `ns::Runtime`
 
 A process-wide singleton that initializes the CUDA runtime and enumerates all available devices.
 
 ```cpp
-auto * ctx = ns::Context::getInstance();
-std::cout << ctx->getDevices().size() << " GPU(s) found\n";
-auto * device = ctx->device(0);
+std::cout << ns::Runtime::devices().size() << " GPU(s) found\n";
+auto * device = ns::Runtime::device(0);
 ```
 
 ### `ns::Device`
@@ -238,6 +238,79 @@ a1.data();            // raw device pointer (Type*)
 a1.ptr();             // dev::Ptr<float> — typed device pointer
 ```
 
+### `ns::ScratchArena`
+
+A reusable linear allocation arena for temporary memory. It keeps the largest reserved buffer and divides it into typed, non-owning device pointers, avoiding repeated allocations between sequential operations.
+
+```cpp
+#include <nucleus/scratch_arena.h>
+
+size_t requiredCapacity = 0;
+requiredCapacity = ns::aligned_end_offset<float>(requiredCapacity, count);
+requiredCapacity = ns::aligned_end_offset<uint32_t>(requiredCapacity, count);
+
+ns::ScratchArena arena(allocator);
+arena.reserve(requiredCapacity);
+arena.reuse();
+
+auto values  = arena.allocate<float>(count);
+auto indices = arena.allocate<uint32_t>(count);
+```
+
+Call `reserve()` before allocating when the required capacity may grow, then call `reuse()` at the start of each operation to make the whole buffer available again. `allocate2D()` and `allocate3D()` provide packed multidimensional temporary arrays.
+
+Pointers returned by a scratch arena are non-owning and become invalid when the arena is reused, cleared, destroyed, or its buffer grows. For asynchronous work, reuse the same scratch arena only for operations ordered on one stream, or synchronize explicitly before reusing it across streams.
+
+### `ns::Span<T>` — C++26 `std::span` Compatibility Patch
+
+`ns::Span<T, Extent>` is a host-only patch aligned with C++26 `std::span`. Nucleus currently targets C++20, so this wrapper backports the C++26 `std::initializer_list` constructor for read-only spans while preserving the standard span interface. Mutable element types are exact aliases of the corresponding `std::span`, so existing APIs and type traits continue to work unchanged:
+
+The host-side implementation intentionally uses `std::span` rather than `ns::dev::Span`. Standard span types are more consistently recognized by debuggers, which makes host-side values easier to inspect and troubleshoot. `ns::dev::Span<T>` remains the separate device-side view intended for CUDA code.
+
+```cpp
+#include <nucleus/span.h>
+
+int values[] = { 1, 2, 3, 4 };
+ns::Span<int> mutableValues(values);       // exactly std::span<int>
+ns::Span<int, 4> fixedValues(values);      // exactly std::span<int, 4>
+```
+
+Const element types use a small adapter derived from `std::span<const T, Extent>`. It inherits the standard constructors and adds the C++26 `std::initializer_list` constructor for concise function calls:
+
+```cpp
+int sum(ns::Span<const int> values);
+
+int result = sum({ 1, 2, 3, 4 });
+```
+
+> [!WARNING]
+> An initializer-list backing array follows the lifetime of its `std::initializer_list` object. A braced temporary normally lives only until the end of the full expression. Passing it directly to a function is valid, but storing or returning the resulting span leaves a dangling view:
+>
+> ```cpp
+> auto dangling = ns::Span<const int>{ 1, 2, 3 }; // Do not store this span.
+> ```
+
+Because `Span` selects its implementation through a type trait, template arguments must be written explicitly; `std::span` deduction guides are not available. Use `ns::as_bytes()` when a read-only byte view is needed. CUDA device code should continue to use `ns::dev::Span<T>` from `<nucleus/device_span.h>`.
+
+### `ns::dev::Span<T>` — Device-Side Contiguous View
+
+`ns::dev::Span<T, Extent>` is a lightweight, non-owning view designed primarily for passing contiguous device memory into CUDA kernels and device-callable functions. Its operations are host/device callable where needed for construction and testing, but unlike the host-only `ns::Span`, it is part of the device-side API and does not own the underlying storage. Its mutable and read-only forms are intentionally represented as separate types: `ns::dev::Span<T, Extent>` inherits from `ns::dev::Span<const T, Extent>`. This preserves mutable element access for the former while allowing it to be passed to APIs that accept a const view. The split also keeps `T` available for implicit template argument deduction through the const-view interface:
+
+```cu
+template<typename Type>
+NS_CUDA_CALLABLE void inspect(ns::dev::Span<const Type> values)
+{
+	// read-only access to values
+}
+
+__global__ void kernel(ns::dev::Span<int> values)
+{
+	inspect(values); // Type is deduced as int; values is viewed as const
+}
+```
+
+Use `ns::as_writable_bytes()` only with mutable, non-volatile spans. `ns::as_bytes()` provides a read-only byte view for non-volatile spans.
+
 ### `dev::Ptr<T>` — Typed Device Pointer
 
 A lightweight, typed wrapper for a device pointer that carries array bounds. It is both host- and device-callable and supports optional runtime bounds checking.
@@ -249,8 +322,8 @@ stream.launch(my_kernel, grid, block)(array.ptr(), count);
 // Device side (in .cu): element access with optional bounds check
 __global__ void my_kernel(dev::Ptr<float> data, unsigned int n)
 {
-    CUDA_for(i, n);   // auto bounds-check; returns if i >= n
-    data[i] *= 2.0f;
+	CUDA_for(i, n);   // auto bounds-check; returns if i >= n
+	data[i] *= 2.0f;
 }
 
 // Type-safe reinterpret cast between binary-compatible types
@@ -287,9 +360,21 @@ graph.execute(stream);
 
 Nucleus separates texture memory (the backing storage) from the sampling/access objects:
 
-- **Image** — allocates CUDA array memory on the device (analogous to a GPU texture buffer). Created once and shared across texture/surface objects.
+- **Image** — a lightweight value object backed by shared RAII-managed CUDA array storage (analogous to a GPU texture buffer). Copying an Image shares its device allocation.
 - **Texture** — a read-only, hardware-sampled view of an Image. Passed to kernels as a `dev::Tex*<T>` handle.
-- **Surface** — a read-write view of an Image (requires `bSurfaceLoadStore = true` at image creation). Passed to kernels as a `dev::Surf*<T>` handle.
+- **Surface** — a read-write view of an Image. Passed to kernels as a `dev::Surf*<T>` handle.
+
+Nucleus always creates CUDA arrays with surface load/store support enabled. This deliberately avoids an opt-in constructor flag: an `Image` can be bound to a `Surface` whenever the workflow needs it, without having to predict that requirement at allocation time. The capability has negligible performance impact for the supported image types, so Nucleus favors this simpler, consistent API.
+
+Images, textures, and surfaces use value-oriented host APIs. Pass an Image instance directly when constructing a `Texture*` or `Surface*`; the bound object retains shared ownership of the underlying CUDA allocation, so the original Image variable does not need to outlive it. Images can be tested for validity with `operator bool()`, and their native CUDA handles are available through `handle()`.
+
+Mipmapped `Image*Lod<T>` objects own all mip levels through the same shared resource. Use `numLevels()` to query the number of levels and `level(i)` to obtain a lightweight, strongly typed Image view for level `i`. The returned view can be passed directly to a matching surface or used independently while keeping the complete mipmapped allocation alive:
+
+```cpp
+ns::Image2DLod<float4> imageLod(allocator, width, height, 4);
+ns::Image2D<float4> level1 = imageLod.level(1);
+ns::Surface2D<float4> surface(level1);
+```
 
 The table below lists all available Image, Texture, and Surface type combinations:
 
@@ -318,10 +403,10 @@ The table below lists all available Image, Texture, and Surface type combination
 #include <nucleus/sampler.h>
 
 // 1. Allocate image memory (CUDA array on the device).
-auto image = std::make_shared<ns::Image2D<float4>>(device->defaultAllocator(), width, height);
+ns::Image2D<float4> image(device->defaultAllocator(), width, height);
 
 // 2. Upload data via stream.memcpy (host → image).
-stream.memcpy(image->data(), host_pixels.data(), width, height);
+stream.memcpy(image.data(), host_pixels.data(), width, height);
 
 // 3. Create a texture bound to the image.
 ns::Sampler sampler;                           // default: linear filter, clamp
@@ -335,11 +420,11 @@ stream.launch(my_kernel, grid, block)(tex.handle(), width, height);
 // Device side (in .cu):
 __global__ void my_kernel(dev::Tex2D<float4> tex, int width, int height)
 {
-    CUDA_for(tid, width * height);
-    float u = (tid % width + 0.5f) / width;
-    float v = (tid / width + 0.5f) / height;
-    float4 color = tex.fetch(u, v);   // hardware-interpolated sample
-    // ...
+	CUDA_for(tid, width * height);
+	float u = (tid % width + 0.5f) / width;
+	float v = (tid / width + 0.5f) / height;
+	float4 color = tex.fetch(u, v);   // hardware-interpolated sample
+	// ...
 }
 ```
 
@@ -349,18 +434,21 @@ __global__ void my_kernel(dev::Tex2D<float4> tex, int width, int height)
 Nucleus/
 ├── include/nucleus/        # Public headers (add to your include path)
 │   ├── nucleus.h           # Convenience header — includes everything
-│   ├── context.h           # ns::Context  (device enumeration, singleton)
+│   ├── version.h           # ns::Version (major/minor/patch value)
+│   ├── runtime.h           # ns::Runtime  (device enumeration, singleton)
 │   ├── device.h            # ns::Device   (GPU handle, properties, allocator)
 │   ├── stream.h            # ns::Stream   (async work, kernel launch, memcpy)
 │   ├── event.h             # ns::Event, ns::TimedEvent
 │   ├── graph.h             # ns::Graph    (CUDA graph with auto-caching)
 │   ├── allocator.h         # ns::Allocator, DeviceAllocator, HostAllocator
 │   ├── buffer.h            # ns::Buffer   (raw RAII memory block)
-│   ├── buffer_view.h       # ns::BufferView/BufferView2D/BufferView3D (non-owning views)
+│   ├── span.h              # ns::Span<T> (C++26 std::span compatibility patch)
+│   ├── device_span.h       # ns::dev::Span<T> (device-side contiguous view)
+│   ├── buffer_slice.h      # ns::BufferSlice<T>, BufferSlice2D<T>, BufferSlice3D<T> (owning typed slices)
+│   ├── scratch_arena.h     # ns::ScratchArena (reusable temporary memory)
 │   ├── array_1d.h          # ns::Array<T>
 │   ├── array_2d.h          # ns::Array2D<T>
 │   ├── array_3d.h          # ns::Array3D<T>
-│   ├── array_proxy.h       # ns::ArrayProxy<T> (span-like argument helper)
 │   ├── device_pointer.h    # dev::Ptr<T>, dev::Ptr2<T>, dev::Ptr3<T>
 │   ├── device_texture.h    # dev::Tex1D/2D/3D/Cube<T> (device-side sampling)
 │   ├── device_surface.h    # dev::Surf1D/2D/3D/Cube<T> (device-side r/w)
@@ -377,12 +465,14 @@ Nucleus/
 ├── src/                    # Library implementation (.cpp / .cu)
 ├── examples/               # Standalone example programs
 │   ├── customized_allocator/   Custom allocator implementation
+│   ├── default_allocator/      Allocation without explicit allocator arguments
 │   ├── customized_pixel_type/  Struct-based pixel types in kernels
 │   ├── dynamic_texture/        Dynamic texture creation and binding
 │   ├── julia_set/              GPU fractal rendering
 │   ├── multi_gpu/              Multi-GPU workload distribution
 │   ├── pinned_memory/          Page-locked (pinned) host memory
-│   └── random_access/          Texture-based random access
+│   ├── random_access/          Texture-based random access
+│   └── scratch_arena/          Reusable temporary memory
 ├── tests/                  # Unit and integration tests
 ├── cmake/                  # CMake helper scripts and export headers
 └── CMakeLists.txt

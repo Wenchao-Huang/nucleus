@@ -24,7 +24,7 @@
 #include "fwd.h"
 #include "buffer.h"
 #include "logger.h"
-#include "buffer_view.h"
+#include "runtime.h"
 #include "device_pointer.h"
 
 namespace NS_NAMESPACE
@@ -43,13 +43,16 @@ namespace NS_NAMESPACE
 	public:
 
 		//!	@brief		Construct an empty array.
-		Array3D() noexcept : dev::Ptr3<Type>(nullptr), m_buffer(nullptr) {}
+		Array3D() noexcept : dev::Ptr3<Type>(nullptr), m_buffer() {}
+
+		//!	@brief		Allocates a 3D array with specified dimensions using the default allocator.
+		explicit Array3D(size_t width, size_t height, size_t depth) : Array3D(Runtime::defaultAllocator(), width, height, depth) {}
 
 		//!	@brief		Constructs and allocates a 2D array with specified dimensions.
-		explicit Array3D(std::shared_ptr<Allocator> allocator, size_t width, size_t height, size_t depth) : Array3D() { this->resize(allocator, width, height, depth); }
+		explicit Array3D(std::shared_ptr<Allocator> allocator, size_t width, size_t height, size_t depth) : Array3D() { this->resize(std::move(allocator), width, height, depth); }
 
 		//!	@brief		Move constructor. Transfers ownership from another array.
-		Array3D(Array3D && rhs) : m_buffer(std::exchange(rhs.m_buffer, nullptr)),
+		Array3D(Array3D && rhs) : m_buffer(std::move(rhs.m_buffer)),
 			dev::Ptr3<Type>(std::exchange(rhs.m_data, nullptr), std::exchange(rhs.m_height, 0), std::exchange(rhs.m_width, 0), std::exchange(rhs.m_depth, 0)) {}
 
 	public:
@@ -68,9 +71,9 @@ namespace NS_NAMESPACE
 
 			if ((this->allocator() != allocator) || (this->size() != width * height * depth))
 			{
-				m_buffer = std::make_shared<Buffer>(allocator, sizeof(Type) * width * height * depth);
+				m_buffer = Buffer(std::move(allocator), sizeof(Type) * width * height * depth);
 
-				dev::Ptr3<Type>::m_data = reinterpret_cast<Type*>(m_buffer->data());
+				dev::Ptr3<Type>::m_data = reinterpret_cast<Type*>(m_buffer.data());
 
 				dev::Ptr3<Type>::m_height = static_cast<uint32_t>(height);
 
@@ -90,16 +93,18 @@ namespace NS_NAMESPACE
 
 
 		/**
-		 *	@brief		Resizes the array maintaining current allocator.
+		 *	@brief		Resizes the array maintaining default allocator.
 		 *	@param[in]	width - New column count.
 		 *	@param[in]	height - New row count.
 		 *	@param[in]	depth - New layer count.
 		 */
 		void resize(size_t width, size_t height, size_t depth)
 		{
-			NS_ASSERT_LOG_IF(m_buffer == nullptr, "Empty allocator!");
+			auto allocator = Runtime::defaultAllocator();
+
+			NS_ASSERT_LOG_IF(!allocator, "No default allocator!");
 			
-			this->resize(m_buffer->allocator(), width, height, depth);
+			this->resize(allocator, width, height, depth);
 		}
 
 
@@ -127,9 +132,9 @@ namespace NS_NAMESPACE
 		/**
 		 *	@brief		Gets the allocator associated with.
 		 */
-		std::shared_ptr<Allocator> allocator() const
+		const std::shared_ptr<Allocator> & allocator() const
 		{
-			return m_buffer ? m_buffer->allocator() : nullptr;
+			return m_buffer.allocator();
 		}
 
 
@@ -137,7 +142,7 @@ namespace NS_NAMESPACE
 		 *	@brief		Releases the ownership of the internal buffer and returns it.
 		 *	@note		After this call, the Array3D will be in an empty state.
 		 */
-		std::shared_ptr<Buffer> releaseBuffer()
+		Buffer releaseBuffer()
 		{
 			dev::Ptr3<Type>::m_width = 0;
 			
@@ -147,7 +152,7 @@ namespace NS_NAMESPACE
 
 			dev::Ptr3<Type>::m_data = nullptr;
 
-			return std::exchange(m_buffer, nullptr);
+			return std::exchange(m_buffer, Buffer());
 		}
 
 
@@ -164,7 +169,7 @@ namespace NS_NAMESPACE
 
 			dev::Ptr3<Type>::m_depth = std::exchange(rhs.m_depth, 0);
 
-			m_buffer = std::exchange(rhs.m_buffer, nullptr);
+			m_buffer = std::move(rhs.m_buffer);
 		}
 
 
@@ -191,7 +196,7 @@ namespace NS_NAMESPACE
 		 */
 		void clear() noexcept
 		{
-			if (m_buffer != nullptr)
+			if (m_buffer)
 			{
 				dev::Ptr3<Type>::m_data = nullptr;
 
@@ -201,21 +206,9 @@ namespace NS_NAMESPACE
 
 				dev::Ptr3<Type>::m_width = 0;
 
-				m_buffer = nullptr;
+				m_buffer = Buffer();
 			}
 		}
-
-
-		/**
-		 *	@brief		Returns a non-owning 3D view of the entire array.
-		 */
-		BufferView3D<const Type> view() const { return m_buffer ? BufferView3D<const Type>(m_buffer, 0, this->width(), this->height(), this->depth()) : BufferView3D<const Type>(); }
-
-
-		/**
-		 *	@brief		Returns a non-owning 3D view of the entire array.
-		 */
-		BufferView3D<Type> view() { return m_buffer ? BufferView3D<Type>(m_buffer, 0, this->width(), this->height(), this->depth()) : BufferView3D<Type>(); }
 
 
 		/**
@@ -233,6 +226,6 @@ namespace NS_NAMESPACE
 
 	private:
 
-		std::shared_ptr<Buffer>		m_buffer;
+		Buffer		m_buffer;
 	};
 }

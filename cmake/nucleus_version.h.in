@@ -19,38 +19,13 @@
  *	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  *	SOFTWARE.
  */
-
-#include <nucleus/event.h>
-#include <nucleus/device.h>
-#include <nucleus/stream.h>
-#include <nucleus/context.h>
-#include <nucleus/scoped_timer.h>
+#pragma once
 
 /*********************************************************************************
-********************************    event_test    ********************************
+*****************************    Library Version     *****************************
 *********************************************************************************/
 
-void event_test()
-{
-	auto device = ns::Context::getInstance()->device(0);
-	auto & stream = device->defaultStream();
-
-	ns::Event		event0(device);
-	ns::TimedEvent	event1(device);
-	ns::TimedEvent	event2(device);
-	ns::ScopedTimer	timer(stream, [](std::chrono::nanoseconds ns) { printf("ScopedTime: %fus\n", ns.count() * 1e-3); });
-
-	stream.record(event0);
-	stream.record(event1);
-	stream.record(event2);
-	stream.waitFor(event1).sync();
-
-	auto time = ns::TimedEvent::elapsedTime(event1, event2);
-
-	if (event1.query())
-	{
-		event1.sync();
-		event1.device();
-		event1.handle();
-	}
-}
+#define NS_VERSION_MAJOR	@PROJECT_VERSION_MAJOR@
+#define NS_VERSION_MINOR	@PROJECT_VERSION_MINOR@
+#define NS_VERSION_PATCH	@PROJECT_VERSION_PATCH@
+#define NS_VERSION_STR		"@PROJECT_VERSION@"

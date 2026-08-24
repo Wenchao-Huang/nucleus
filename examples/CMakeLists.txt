@@ -21,8 +21,10 @@
 cmake_minimum_required(VERSION 3.18)
 
 # Add samples
+add_subdirectory(scratch_arena)
 add_subdirectory(random_access)
 add_subdirectory(pinned_memory)
+add_subdirectory(default_allocator)
 add_subdirectory(customized_allocator)
 add_subdirectory(customized_pixel_type)
 

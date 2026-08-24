@@ -22,16 +22,16 @@
 
 #include "logger.h"
 #include "device.h"
-#include "context.h"
+#include "runtime.h"
 #include <cuda_runtime_api.h>
 
 NS_USING_NAMESPACE
 
 /*********************************************************************************
-*********************************    Context    **********************************
+*********************************    Runtime    **********************************
 *********************************************************************************/
 
-Context::Context()
+Runtime::Runtime()
 {
 	cudaGetLastError();
 
@@ -41,10 +41,10 @@ Context::Context()
 
 	cudaDriverGetVersion(&driverVersion);
 
-	m_driverVersion.Major = driverVersion / 1000;
-	m_driverVersion.Minor = (driverVersion % 1000) / 10;
+	m_driverVersion.major = driverVersion / 1000;
+	m_driverVersion.minor = (driverVersion % 1000) / 10;
 
-	NS_INFO_LOG("CUDA driver version: %d.%d", m_driverVersion.Major, m_driverVersion.Minor);
+	NS_INFO_LOG("CUDA driver version: %d.%d", m_driverVersion.major, m_driverVersion.minor);
 
 	//////////////////////////////////////////////////////////////////////
 
@@ -52,10 +52,10 @@ Context::Context()
 
 	cudaRuntimeGetVersion(&runtimeVersion);
 
-	m_runtimeVersion.Major = runtimeVersion / 1000;
-	m_runtimeVersion.Minor = (runtimeVersion % 1000) / 10;
+	m_runtimeVersion.major = runtimeVersion / 1000;
+	m_runtimeVersion.minor = (runtimeVersion % 1000) / 10;
 
-	NS_INFO_LOG("CUDA runtime version: %d.%d", m_runtimeVersion.Major, m_runtimeVersion.Minor);
+	NS_INFO_LOG("CUDA runtime version: %d.%d", m_runtimeVersion.major, m_runtimeVersion.minor);
 
 	//////////////////////////////////////////////////////////////////////
 
@@ -80,31 +80,36 @@ Context::Context()
 		NS_INFO_LOG("CUDA device(%d): %s, compute capability: %d.%d", i, devProp.name, devProp.major, devProp.minor);
 
 		m_cudaDevices[i] = new Device(i, devProp);
+
+		if (i == 0)
+		{
+			m_defaultAlloc = m_cudaDevices[0]->defaultAllocator();
+		}
 	}
 
 	cudaGetLastError();
 }
 
 
-const char * Context::getErrorString(Error_t eValue) noexcept
+const char * Runtime::getErrorString(Error_t err) noexcept
 {
-	return cudaGetErrorString(static_cast<cudaError_t>(eValue));
+	return cudaGetErrorString(static_cast<cudaError_t>(err));
 }
 
 
-const char * Context::getErrorName(Error_t eValue) noexcept
+const char * Runtime::getErrorName(Error_t err) noexcept
 {
-	return cudaGetErrorName(static_cast<cudaError_t>(eValue));
+	return cudaGetErrorName(static_cast<cudaError_t>(err));
 }
 
 
-Error_t Context::getLastError() noexcept
+Error_t Runtime::getLastError() noexcept
 {
 	return cudaGetLastError();
 }
 
 
-Context::~Context()
+Runtime::~Runtime()
 {
 	for (size_t i = 0; i < m_cudaDevices.size(); i++)
 	{

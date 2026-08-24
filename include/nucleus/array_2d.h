@@ -24,7 +24,7 @@
 #include "fwd.h"
 #include "buffer.h"
 #include "logger.h"
-#include "buffer_view.h"
+#include "runtime.h"
 #include "device_pointer.h"
 
 namespace NS_NAMESPACE
@@ -43,13 +43,16 @@ namespace NS_NAMESPACE
 	public:
 
 		//!	@brief		Construct an empty array.
-		Array2D() noexcept : dev::Ptr2<Type>(nullptr), m_buffer(nullptr) {}
+		Array2D() noexcept : dev::Ptr2<Type>(nullptr), m_buffer() {}
+
+		//!	@brief		Allocates a 2D array with specified dimensions using the default allocator.
+		explicit Array2D(size_t width, size_t height) : Array2D(Runtime::defaultAllocator(), width, height) {}
 
 		//!	@brief		Constructs and allocates a 2D array with specified dimensions.
-		explicit Array2D(std::shared_ptr<Allocator> alloctor, size_t width, size_t height) : Array2D() { this->resize(alloctor, width, height); }
+		explicit Array2D(std::shared_ptr<Allocator> alloctor, size_t width, size_t height) : Array2D() { this->resize(std::move(alloctor), width, height); }
 
 		//!	@brief		Move constructor. Transfers ownership from another array.
-		Array2D(Array2D && rhs) : dev::Ptr2<Type>(std::exchange(rhs.m_data, nullptr), std::exchange(rhs.m_width, 0), std::exchange(rhs.m_height, 0)),  m_buffer(std::exchange(rhs.m_buffer, nullptr)) {}
+		Array2D(Array2D && rhs) : dev::Ptr2<Type>(std::exchange(rhs.m_data, nullptr), std::exchange(rhs.m_width, 0), std::exchange(rhs.m_height, 0)),  m_buffer(std::move(rhs.m_buffer)) {}
 
 	public:
 
@@ -66,9 +69,9 @@ namespace NS_NAMESPACE
 
 			if ((this->allocator() != allocator) || (this->size() != width * height))
 			{
-				m_buffer = std::make_shared<Buffer>(allocator, sizeof(Type) * width * height);
+				m_buffer = Buffer(std::move(allocator), sizeof(Type) * width * height);
 
-				dev::Ptr2<Type>::m_data = reinterpret_cast<Type*>(m_buffer->data());
+				dev::Ptr2<Type>::m_data = reinterpret_cast<Type*>(m_buffer.data());
 
 				dev::Ptr2<Type>::m_height = static_cast<uint32_t>(height);
 
@@ -84,16 +87,18 @@ namespace NS_NAMESPACE
 
 
 		/**
-		 *	@brief		Resizes the array maintaining current allocator.
+		 *	@brief		Resizes the array maintaining default allocator.
 		 *	@param[in]	width - New column count
 		 *	@param[in]	height - New row count
 		 *	@note		If the size changes, existing data will be lost.
 		 */
 		void resize(size_t width, size_t height)
 		{
-			NS_ASSERT_LOG_IF(m_buffer == nullptr, "Empty allocator!");
+			auto allocator = Runtime::defaultAllocator();
 
-			this->resize(m_buffer->allocator(), width, height);
+			NS_ASSERT_LOG_IF(!allocator, "No default allocator!");
+
+			this->resize(allocator, width, height);
 		}
 
 
@@ -118,9 +123,9 @@ namespace NS_NAMESPACE
 		/**
 		 *	@brief		Gets the allocator associated with.
 		 */
-		std::shared_ptr<Allocator> allocator() const
+		const std::shared_ptr<Allocator> & allocator() const
 		{
-			return m_buffer ? m_buffer->allocator() : nullptr;
+			return m_buffer.allocator();
 		}
 
 
@@ -128,7 +133,7 @@ namespace NS_NAMESPACE
 		 *	@brief		Releases the ownership of the internal buffer and returns it.
 		 *	@note		After this call, the Array2D will be in an empty state.
 		 */
-		std::shared_ptr<Buffer> releaseBuffer()
+		Buffer releaseBuffer()
 		{
 			dev::Ptr2<Type>::m_width = 0;
 
@@ -136,7 +141,7 @@ namespace NS_NAMESPACE
 
 			dev::Ptr2<Type>::m_data = nullptr;
 
-			return std::exchange(m_buffer, nullptr);
+			return std::exchange(m_buffer, Buffer());
 		}
 
 
@@ -151,7 +156,7 @@ namespace NS_NAMESPACE
 
 			dev::Ptr2<Type>::m_width = std::exchange(rhs.m_width, 0);
 
-			m_buffer = std::exchange(rhs.m_buffer, nullptr);
+			m_buffer = std::move(rhs.m_buffer);
 		}
 
 
@@ -175,7 +180,7 @@ namespace NS_NAMESPACE
 		 */
 		void clear() noexcept
 		{
-			if (m_buffer != nullptr)
+			if (m_buffer)
 			{
 				dev::Ptr2<Type>::m_data = nullptr;
 
@@ -183,21 +188,9 @@ namespace NS_NAMESPACE
 				
 				dev::Ptr2<Type>::m_width = 0;
 
-				m_buffer = nullptr;
+				m_buffer = Buffer();
 			}
 		}
-
-
-		/**
-		 *	@brief		Returns a non-owning 2D view of the entire array.
-		 */
-		BufferView2D<const Type> view() const { return m_buffer ? BufferView2D<const Type>(m_buffer, 0, this->width(), this->height()) : BufferView2D<const Type>(); }
-
-
-		/**
-		 *	@brief		Returns a non-owning 2D view of the entire array.
-		 */
-		BufferView2D<Type> view() { return m_buffer ? BufferView2D<Type>(m_buffer, 0, this->width(), this->height()) : BufferView2D<Type>(); }
 
 
 		/**
@@ -215,6 +208,6 @@ namespace NS_NAMESPACE
 
 	private:
 
-		std::shared_ptr<Buffer>		m_buffer;
+		Buffer		m_buffer;
 	};
 }

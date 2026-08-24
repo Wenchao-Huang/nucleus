@@ -20,37 +20,28 @@
  *	SOFTWARE.
  */
 
-#include <nucleus/buffer.h>
-#include <nucleus/device.h>
-#include <nucleus/context.h>
+#include <nucleus/logger.h>
 
 /*********************************************************************************
-****************************    shared_handle_test    ****************************
+*******************************    test_logger    ********************************
 *********************************************************************************/
 
-void shared_handle_test()
+void test_logger()
 {
-	auto device = ns::Context::getInstance()->device(0);
-	auto allocator = device->defaultAllocator();
+	NS_INFO_LOG("This is info log.");
+	NS_DEBUG_LOG("This is debug log.");
+	NS_ERROR_LOG("This is error log.");
+	NS_ASSERT_LOG("This is assert log");
+	NS_WARNING_LOG("This is warning log.");
 
-	ns::SharedBuffer sharedBuffer0;
-	ns::SharedBuffer sharedBuffer1 = nullptr;
-	ns::SharedBuffer sharedBuffer2(allocator, 100);
+	ns::Logger::getInstance()->registerCallback([](const char * fileName, int line, const char * funcName, ns::Logger::Level level, const char * logMsg)
+	{
+		int a = 0;
+	});
 
-	assert(sharedBuffer2->capacity() == 100);
-	ns::SharedBuffer sharedBuffer3 = std::move(sharedBuffer2);
-	assert(sharedBuffer3->capacity() == 100);
-
-	ns::SharedBuffer sharedBuffer4 = ns::SharedBuffer{ allocator, 200 };
-	assert(sharedBuffer4->capacity() == 200);
-
-	ns::SharedBuffer sharedBuffer5 = std::make_unique<ns::Buffer>(allocator, 300);
-	assert(sharedBuffer5->capacity() == 300);
-
-	ns::SharedBuffer sharedBuffer6 = std::make_shared<ns::Buffer>(allocator, 400);
-	assert(sharedBuffer6->capacity() == 400);
-	assert(sharedBuffer6);
-
-	sharedBuffer6.reset();
-	assert(sharedBuffer6 == nullptr);
+	NS_INFO_LOG_IF(true, "This is info log.");
+	NS_DEBUG_LOG_IF(true, "This is debug log.");
+	NS_ERROR_LOG_IF(true, "This is error log.");
+//	NS_ASSERT_LOG_IF(true, "This is assert log");
+	NS_WARNING_LOG_IF(true, "This is warning log.");
 }

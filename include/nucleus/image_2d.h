@@ -22,6 +22,7 @@
 #pragma once
 
 #include "image.h"
+#include "runtime.h"
 
 namespace NS_NAMESPACE
 {
@@ -39,35 +40,40 @@ namespace NS_NAMESPACE
 	public:
 
 		/**
+		 *	@brief		Default constructor.
+		 */
+		Image2D() = default;
+
+
+		/**
 		 *	@brief		Constructs a 2D image.
 		 *	@param[in]	allocator - Pointer to the associated allocator.
 		 *	@param[in]	format - Texel format of the image.
 		 *	@param[in]	width - Width of the image.
 		 *	@param[in]	height - height of the image.
-		 * 	@param[in]	bSurfaceLoadStore - Boolean flag indicating whether the buffer should support surface load/store operations.
 		 *	@throw		cudaError_t - In case of failure.
 		 */
-		NS_API explicit Image2D(std::shared_ptr<DeviceAllocator> allocator, Format format, size_t width, size_t height, bool bSurfaceLoadStore = false);
+		NS_API explicit Image2D(std::shared_ptr<DeviceAllocator> allocator, Format format, size_t width, size_t height);
 
-	private:
 
 		/**
-		 *	@brief		Constructs from Image2DLod.
-		 *	@param[in]	hImage - Handle of texture memory (from cudaMipmappedArray_t).
+		 *	@brief		Constructs a 2D image with default allocator.
 		 *	@param[in]	format - Texel format of the image.
 		 *	@param[in]	width - Width of the image.
 		 *	@param[in]	height - height of the image.
-		 *	@param[in]	depth - Depth of the image.
-		 * 	@param[in]	flags - Flags for image creation (interanl use).
 		 *	@throw		cudaError_t - In case of failure.
-		 *	@note		Created by class `Image2DLod<void>` only.
 		 */
-		explicit Image2D(cudaArray_t hImage, Format format, size_t width, size_t height, size_t depth, int flags) : Image(hImage, format, width, height, depth, flags) {}
+		explicit Image2D(Format format, size_t width, size_t height) : Image2D(Runtime::defaultAllocator(), format, width, height) {}
+
+	protected:
+
+		//!	@brief		Copy constructor from `Image`.
+		explicit Image2D(const Image & image) : Image(image) {}
 
 	public:
 
-		//	Returns the height of the image.
-		uint32_t height() const { return m_height; }
+		//!	@brief		Returns the height of the image.
+		uint32_t height() const { return m_extent.height; }
 	};
 
 	/*****************************************************************************
@@ -79,8 +85,25 @@ namespace NS_NAMESPACE
 	 */
 	template<typename Type> class Image2D : public Image2D<void>
 	{
+		friend class Image2DLod<Type>;
 
 	public:
+
+		/**
+		 *	@brief		Default constructor.
+		 */
+		Image2D() = default;
+
+
+		/**
+		 *	@brief		Constructs a 2D image with default allocator.
+		 *	@param[in]	width - Width of the image.
+		 *	@param[in]	height - height of the image.
+		 *	@param[in]	numLayers - Layers of the image, is clamped down to 1.
+		 *	@throw		cudaError_t - In case of failure.
+		 */
+		explicit Image2D(size_t width, size_t height) : Image2D(Runtime::defaultAllocator(), width, height) {}
+
 
 		/**
 		 *	@brief		Constructs a 2D image.
@@ -88,18 +111,22 @@ namespace NS_NAMESPACE
 		 *	@param[in]	width - Width of the image.
 		 *	@param[in]	height - height of the image.
 		 *	@param[in]	numLayers - Layers of the image, is clamped down to 1.
-		 * 	@param[in]	bSurfaceLoadStore - Boolean flag indicating whether the buffer should support surface load/store operations.
 		 *	@throw		cudaError_t - In case of failure.
 		 */
-		explicit Image2D(std::shared_ptr<DeviceAllocator> allocator, size_t width, size_t height, bool bSurfaceLoadStore = false) : Image2D<void>(allocator, FormatMapping<Type>::value, width, height, bSurfaceLoadStore) {}
+		explicit Image2D(std::shared_ptr<DeviceAllocator> allocator, size_t width, size_t height) : Image2D<void>(std::move(allocator), FormatOf<Type>::value, width, height) {}
+
+	protected:
+
+		//!	@brief		Copy constructor from `Image`.
+		explicit Image2D(const Image & image) : Image2D<void>(image) {}
 
 	public:
 
-		//	Returns accessor to the data.
+		//!	@brief		Returns accessor to the data.
 		ImageAccessor<Type> data() const { return ImageAccessor<Type>{ m_hImage }; }
 
-		//	Returns the texel format of the image at compile time.
-		static constexpr Format format() { return FormatMapping<Type>::value; }
+		//!	@brief		Returns the texel format of the image at compile time.
+		static constexpr Format format() { return FormatOf<Type>::value; }
 	};
 
 	/*****************************************************************************
@@ -116,39 +143,45 @@ namespace NS_NAMESPACE
 	public:
 
 		/**
+		 *	@brief		Default constructor.
+		 */
+		Image2DLayered() = default;
+
+
+		/**
 		 *	@brief		Constructs a layered 2D image.
 		 *	@param[in]	allocator - Pointer to the associated allocator.
 		 *	@param[in]	format - Texel format of the image.
 		 *	@param[in]	width - Width of the image.
 		 *	@param[in]	height - height of the image.
 		 *	@param[in]	numLayers - Layers of the image, is clamped down to 1.
-		 * 	@param[in]	bSurfaceLoadStore - Boolean flag indicating whether the buffer should support surface load/store operations.
 		 *	@throw		cudaError_t - In case of failure.
 		 */
-		NS_API explicit Image2DLayered(std::shared_ptr<DeviceAllocator> allocator, Format format, size_t width, size_t height, size_t numLayers, bool bSurfaceLoadStore = false);
+		NS_API explicit Image2DLayered(std::shared_ptr<DeviceAllocator> allocator, Format format, size_t width, size_t height, size_t numLayers);
 
-	private:
 
 		/**
-		 *	@brief		Constructs from MipmappedTextureMemory2DLayered.
-		 *	@param[in]	hImage - Handle of texture memory (from cudaMipmappedArray_t).
+		 *	@brief		Constructs a layered 2D image with default allocator.
 		 *	@param[in]	format - Texel format of the image.
 		 *	@param[in]	width - Width of the image.
 		 *	@param[in]	height - height of the image.
-		 *	@param[in]	depth - Depth of the image.
-		 * 	@param[in]	flags - Flags for image creation (interanl use).
+		 *	@param[in]	numLayers - Layers of the image, is clamped down to 1.
 		 *	@throw		cudaError_t - In case of failure.
-		 *	@note		Created by class `Image2DLayeredLod<void>` only.
 		 */
-		explicit Image2DLayered(cudaArray_t hImage, Format format, size_t width, size_t height, size_t depth, int flags) : Image(hImage, format, width, height, depth, flags) {}
+		explicit Image2DLayered(Format format, size_t width, size_t height, size_t numLayers) : Image2DLayered(Runtime::defaultAllocator(), format, width, height, numLayers) {}
+
+	protected:
+
+		//!	@brief		Copy constructor from `Image`.
+		explicit Image2DLayered(const Image & image) : Image(image) {}
 
 	public:
 
-		//	Returns the number of layers.
-		uint32_t numLayers() const { return m_depth; }
+		//!	@brief		Returns the number of layers.
+		uint32_t numLayers() const { return m_extent.depth; }
 
-		//	Returns the height of the image.
-		uint32_t height() const { return m_height; }
+		//!	@brief		Returns the height of the image.
+		uint32_t height() const { return m_extent.height; }
 	};
 
 	/*****************************************************************************
@@ -160,8 +193,25 @@ namespace NS_NAMESPACE
 	 */
 	template<typename Type> class Image2DLayered : public Image2DLayered<void>
 	{
+		friend class Image2DLayeredLod<Type>;
 
 	public:
+
+		/**
+		 *	@brief		Default constructor.
+		 */
+		Image2DLayered() = default;
+
+
+		/**
+		 *	@brief		Constructs a layered 2D image with default allocator.
+		 *	@param[in]	width - Width of the image.
+		 *	@param[in]	height - height of the image.
+		 *	@param[in]	numLayers - Layers of the image, is clamped down to 1.
+		 *	@throw		cudaError_t - In case of failure.
+		 */
+		explicit Image2DLayered(size_t width, size_t height, size_t numLayers) : Image2DLayered(Runtime::defaultAllocator(), width, height, numLayers) {}
+
 
 		/**
 		 *	@brief		Constructs a layered 2D image.
@@ -169,18 +219,22 @@ namespace NS_NAMESPACE
 		 *	@param[in]	width - Width of the image.
 		 *	@param[in]	height - height of the image.
 		 *	@param[in]	numLayers - Layers of the image, is clamped down to 1.
-		 * 	@param[in]	bSurfaceLoadStore - Boolean flag indicating whether the buffer should support surface load/store operations.
 		 *	@throw		cudaError_t - In case of failure.
 		 */
-		explicit Image2DLayered(std::shared_ptr<DeviceAllocator> allocator, size_t width, size_t height, size_t numLayers, bool bSurfaceLoadStore = false) : Image2DLayered<void>(allocator, FormatMapping<Type>::value, width, height, numLayers, bSurfaceLoadStore) {}
-	
+		explicit Image2DLayered(std::shared_ptr<DeviceAllocator> allocator, size_t width, size_t height, size_t numLayers) : Image2DLayered<void>(std::move(allocator), FormatOf<Type>::value, width, height, numLayers) {}
+
+	protected:
+
+		//!	@brief		Copy constructor from `Image`.
+		explicit Image2DLayered(const Image & image) : Image2DLayered<void>(image) {}
+
 	public:
 
-		//	Returns accessor to the data.
+		//!	@brief		Returns accessor to the data.
 		ImageAccessor<Type> data() const { return ImageAccessor<Type>{ m_hImage }; }
 
-		//	Returns the texel format of the image at compile time.
-		static constexpr Format format() { return FormatMapping<Type>::value; }
+		//!	@brief		Returns the texel format of the image at compile time.
+		static constexpr Format format() { return FormatOf<Type>::value; }
 	};
 
 	/*****************************************************************************
@@ -196,6 +250,12 @@ namespace NS_NAMESPACE
 	public:
 
 		/**
+		 *	@brief		Default constructor.
+		 */
+		Image2DLod() = default;
+
+
+		/**
 		 *	@brief		Constructs a 2D mipmapped image.
 		 *	@param[in]	allocator - Pointer to the associated allocator.
 		 *	@param[in]	format - Texel format of the image.
@@ -204,24 +264,26 @@ namespace NS_NAMESPACE
 		 *	@param[in]	numLevels - Number of mipmap levels to allocated, is clamped to the range [1, 1 + floor(log2(max(width, height)))].
 		 *	@throw		cudaError_t - In case of failure.
 		 */
-		NS_API Image2DLod(std::shared_ptr<DeviceAllocator> allocator, Format format, size_t width, size_t height, unsigned int numLevels);
+		NS_API explicit Image2DLod(std::shared_ptr<DeviceAllocator> allocator, Format format, size_t width, size_t height, unsigned int numLevels);
 
 
 		/**
-		 *	@return		Reference to the specified level.
-		 *	@warning	`level` should be in the range [0, numLevel).
+		 *	@brief		Constructs a 2D mipmapped image with default allocator.
+		 *	@param[in]	format - Texel format of the image.
+		 *	@param[in]	width - Width of the image.
+		 *	@param[in]	height - height of the image.
+		 *	@param[in]	numLevels - Number of mipmap levels to allocated, is clamped to the range [1, 1 + floor(log2(max(width, height)))].
+		 *	@throw		cudaError_t - In case of failure.
 		 */
-		Image2D<void> & getLevel(size_t level) { return *m_mipmaps[level]; }
+		explicit Image2DLod(Format format, size_t width, size_t height, unsigned int numLevels) : Image2DLod(Runtime::defaultAllocator(), format, width, height, numLevels) {}
 
+	public:
 
-		/**
-		 *	@return		The height of the image.
-		 */
-		uint32_t height() const { return m_height; }
+		//!	@brief		Return the specified level.
+		Image2D<void> level(size_t i) const { return Image2D<void>(m_mipmaps[i]); }
 
-	private:
-
-		std::vector<std::shared_ptr<Image2D<void>>>		m_mipmaps;
+		//!	@brief		Returns the height of the image.
+		uint32_t height() const { return m_extent.height; }
 	};
 
 	/*****************************************************************************
@@ -237,6 +299,22 @@ namespace NS_NAMESPACE
 	public:
 
 		/**
+		 *	@brief		Default constructor.
+		 */
+		Image2DLod() = default;
+
+
+		/**
+		 *	@brief		Constructs a 2D mipmapped image with default allocator.
+		 *	@param[in]	width - Width of the image.
+		 *	@param[in]	height - height of the image.
+		 *	@param[in]	numLevels - Number of mipmap levels to allocated, is clamped to the range [1, 1 + floor(log2(max(width, height)))].
+		 *	@throw		cudaError_t - In case of failure.
+		 */
+		explicit Image2DLod(size_t width, size_t height, unsigned int numLevels) : Image2DLod(Runtime::defaultAllocator(), width, height, numLevels) {}
+
+
+		/**
 		 *	@brief		Constructs a 2D mipmapped image.
 		 *	@param[in]	allocator - Pointer to the associated allocator.
 		 *	@param[in]	width - Width of the image.
@@ -244,20 +322,15 @@ namespace NS_NAMESPACE
 		 *	@param[in]	numLevels - Number of mipmap levels to allocated, is clamped to the range [1, 1 + floor(log2(max(width, height)))].
 		 *	@throw		cudaError_t - In case of failure.
 		 */
-		Image2DLod(std::shared_ptr<DeviceAllocator> allocator, size_t width, size_t height, unsigned int numLevels) : Image2DLod<void>(allocator, FormatMapping<Type>::value, width, height, numLevels) {}
+		explicit Image2DLod(std::shared_ptr<DeviceAllocator> allocator, size_t width, size_t height, unsigned int numLevels) : Image2DLod<void>(std::move(allocator), FormatOf<Type>::value, width, height, numLevels) {}
 
+	public:
 
-		/**
-		 *	@return		Reference to the specified level.
-		 *	@warning	`level` should be in the range [0, numLevel).
-		 */
-		Image2D<Type> & getLevel(size_t level) { return reinterpret_cast<Image2D<Type>&>(Image2DLod<void>::getLevel(level)); }
+		//!	@brief		Return the specified level.
+		Image2D<Type> level(size_t i) const { return Image2D<Type>(m_mipmaps[i]); }
 
-
-		/**
-		 *	@return		Texel format of the image at compile time.
-		 */
-		static constexpr Format format() { return FormatMapping<Type>::value; }
+		//!	@brief		Returns the texel format of the image at compile time.
+		static constexpr Format format() { return FormatOf<Type>::value; }
 	};
 
 	/*****************************************************************************
@@ -273,6 +346,12 @@ namespace NS_NAMESPACE
 	public:
 
 		/**
+		 *	@brief		Default constructor.
+		 */
+		Image2DLayeredLod() = default;
+
+
+		/**
 		 *	@brief		Constructs a 2D layered mipmapped image.
 		 *	@param[in]	allocator - Pointer to the associated allocator.
 		 *	@param[in]	format - Texel format of the image.
@@ -282,26 +361,30 @@ namespace NS_NAMESPACE
 		 *	@param[in]	numLevels - Number of mipmap levels to allocated, is clamped to the range [1, 1 + floor(log2(max(width, height)))].
 		 *	@throw		cudaError_t - In case of failure.
 		 */
-		NS_API Image2DLayeredLod(std::shared_ptr<DeviceAllocator> allocator, Format format, size_t width, size_t height, size_t numLayers, unsigned int numLevels);
+		NS_API explicit Image2DLayeredLod(std::shared_ptr<DeviceAllocator> allocator, Format format, size_t width, size_t height, size_t numLayers, unsigned int numLevels);
 
 
 		/**
-		 *	@return		Reference to the specified level.
-		 *	@warning	`level` should be in the range [0, numLevel).
+		 *	@brief		Constructs a 2D layered mipmapped image with default allocator.
+		 *	@param[in]	format - Texel format of the image.
+		 *	@param[in]	width - Width of the image.
+		 *	@param[in]	height - height of the image.
+		 *	@param[in]	numLayers - Layers of the image, is clamped down to 1.
+		 *	@param[in]	numLevels - Number of mipmap levels to allocated, is clamped to the range [1, 1 + floor(log2(max(width, height)))].
+		 *	@throw		cudaError_t - In case of failure.
 		 */
-		Image2DLayered<void> & getLevel(size_t level) { return *m_mipmaps[level]; }
+		explicit Image2DLayeredLod(Format format, size_t width, size_t height, size_t numLayers, unsigned int numLevels) : Image2DLayeredLod(Runtime::defaultAllocator(), format, width, height, numLayers, numLevels) {}
 
 	public:
 
-		//	Returns the number of layers.
-		uint32_t numLayers() const { return m_depth; }
+		//!	@brief		Return the specified level.
+		Image2DLayered<void> level(size_t i) const { return Image2DLayered<void>(m_mipmaps[i]); }
 
-		//	Returns the height of the image.
-		uint32_t height() const { return m_height; }
+		//!	@brief		Returns the number of layers.
+		uint32_t numLayers() const { return m_extent.depth; }
 
-	private:
-
-		std::vector<std::shared_ptr<Image2DLayered<void>>>		m_mipmaps;
+		//!	@brief		Returns the height of the image.
+		uint32_t height() const { return m_extent.height; }
 	};
 
 	/*****************************************************************************
@@ -317,6 +400,23 @@ namespace NS_NAMESPACE
 	public:
 
 		/**
+		 *	@brief		Default constructor.
+		 */
+		Image2DLayeredLod() = default;
+
+
+		/**
+		 *	@brief		Constructs a 2D layered mipmapped image with default allocator.
+		 *	@param[in]	width - Width of the image.
+		 *	@param[in]	height - height of the image.
+		 *	@param[in]	numLayers - Layers of the image, is clamped down to 1.
+		 *	@param[in]	numLevels - Number of mipmap levels to allocated, is clamped to the range [1, 1 + floor(log2(max(width, height)))].
+		 *	@throw		cudaError_t - In case of failure.
+		 */
+		explicit Image2DLayeredLod(size_t width, size_t height, size_t numLayers, unsigned int numLevels) : Image2DLayeredLod(Runtime::defaultAllocator(), width, height, numLayers, numLevels) {}
+
+
+		/**
 		 *	@brief		Constructs a 2D layered mipmapped image.
 		 *	@param[in]	allocator - Pointer to the associated allocator.
 		 *	@param[in]	width - Width of the image.
@@ -325,19 +425,14 @@ namespace NS_NAMESPACE
 		 *	@param[in]	numLevels - Number of mipmap levels to allocated, is clamped to the range [1, 1 + floor(log2(max(width, height)))].
 		 *	@throw		cudaError_t - In case of failure.
 		 */
-		Image2DLayeredLod(std::shared_ptr<DeviceAllocator> allocator, size_t width, size_t height, size_t numLayers, unsigned int numLevels) : Image2DLayeredLod<void>(allocator, FormatMapping<Type>::value, width, height, numLayers, numLevels) {}
+		explicit Image2DLayeredLod(std::shared_ptr<DeviceAllocator> allocator, size_t width, size_t height, size_t numLayers, unsigned int numLevels) : Image2DLayeredLod<void>(std::move(allocator), FormatOf<Type>::value, width, height, numLayers, numLevels) {}
 
+	public:
 
-		/**
-		 *	@return		Reference to the specified level.
-		 *	@warning	`level` should be in the range [0, numLevel).
-		 */
-		Image2DLayered<Type> & getLevel(size_t level) { return reinterpret_cast<Image2DLayered<Type>&>(Image2DLayeredLod<void>::getLevel(level)); }
+		//!	@brief		Return the specified level.
+		Image2DLayered<Type> level(size_t i) const { return Image2DLayered<Type>(m_mipmaps[i]); }
 
-
-		/**
-		 *	@return		Texel format of the image at compile time.
-		 */
-		static constexpr Format format() { return FormatMapping<Type>::value; }
+		//!	@brief		Returns the texel format of the image at compile time.
+		static constexpr Format format() { return FormatOf<Type>::value; }
 	};
 }

@@ -24,7 +24,7 @@
 
 #include <nucleus/device.h>
 #include <nucleus/stream.h>
-#include <nucleus/context.h>
+#include <nucleus/runtime.h>
 #include <nucleus/array_1d.h>
 #include <nucleus/launch_utils.cuh>
 
@@ -47,7 +47,7 @@ __device__ Complex complex_sqr(Complex z)
 }
 
 
-__global__ void paint_kernel(dev::Ptr<ColorRGB> pixels, int width, float invN, float t, int num)
+__global__ void paint_kernel(dev::Span<ColorRGB> pixels, int width, float invN, float t, int num)
 {
 	CUDA_for(tid, num);
 
@@ -89,7 +89,7 @@ int main()
 
 	/////////////////////////////////////////////////////////////////
 
-	auto device = ns::Context::getInstance()->device(0);
+	auto device = ns::Runtime::device(0);
 	auto allocator = device->defaultAllocator();
 	auto & stream = device->defaultStream();
 	

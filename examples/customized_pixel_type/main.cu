@@ -22,7 +22,7 @@
 
 #include <nucleus/device.h>
 #include <nucleus/stream.h>
-#include <nucleus/context.h>
+#include <nucleus/runtime.h>
 #include <nucleus/surface.h>
 #include <nucleus/array_2d.h>
 #include <nucleus/allocator.h>
@@ -47,8 +47,8 @@ struct NS_ALIGN(16) MyPixelType2
 };
 
 
-template<> struct ns::FormatMapping<MyPixelType1> { static constexpr ns::Format value = ns::Format::Float4; };
-template<> struct ns::FormatMapping<MyPixelType2> { static constexpr ns::Format value = ns::Format::Int4; };
+template<> struct ns::FormatOf<MyPixelType1> { static constexpr ns::Format value = ns::Format::Float4; };
+template<> struct ns::FormatOf<MyPixelType2> { static constexpr ns::Format value = ns::Format::Int4; };
 
 
 __global__ void pixel_assign(dev::Surf2D<MyPixelType1> out1, dev::Surf2D<MyPixelType2> out2)
@@ -79,22 +79,22 @@ __global__ void pixel_assign(dev::Surf2D<MyPixelType1> out1, dev::Surf2D<MyPixel
 
 int main()
 {
-	auto device = ns::Context::getInstance()->device(0);
+	auto device = ns::Runtime::device(0);
 	auto hostAlloc = std::make_shared<ns::HostAllocator>();
 	auto allocator = device->defaultAllocator();
 	auto & stream = device->defaultStream();
 	
-	auto image1 = std::make_shared<ns::Image2D<MyPixelType1>>(allocator, 16, 16);
-	auto image2 = std::make_shared<ns::Image2D<MyPixelType2>>(allocator, 16, 16);
+	auto image1 = ns::Image2D<MyPixelType1>(allocator, 16, 16);
+	auto image2 = ns::Image2D<MyPixelType2>(allocator, 16, 16);
 
 	ns::Surface2D<MyPixelType1>		surface1(image1);
 	ns::Surface2D<MyPixelType2>		surface2(image2);
-	ns::Array2D<MyPixelType1>		array1(hostAlloc, image1->width(), image1->height());
-	ns::Array2D<MyPixelType2>		array2(hostAlloc, image2->width(), image2->height());
+	ns::Array2D<MyPixelType1>		array1(hostAlloc, image1.width(), image1.height());
+	ns::Array2D<MyPixelType2>		array2(hostAlloc, image2.width(), image2.height());
 
-	stream.launch(pixel_assign, 1, { image1->width(), image1->height(), 1})(surface1, surface2);
-	stream.memcpy2D(array1.data(), array1.pitch(), image1->data(), image1->width(), image1->height());
-	stream.memcpy2D(array2.data(), array2.pitch(), image2->data(), image2->width(), image2->height());
+	stream.launch(pixel_assign, 1, { image1.width(), image1.height(), 1})(surface1, surface2);
+	stream.memcpy2D(array1.data(), array1.pitch(), image1.data(), image1.width(), image1.height());
+	stream.memcpy2D(array2.data(), array2.pitch(), image2.data(), image2.width(), image2.height());
 	stream.sync();
 
 	for (int i = 0; i < array1.height(); i++)

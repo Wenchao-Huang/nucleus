@@ -24,7 +24,7 @@
 #include <functional>
 #include <nucleus/stream.h>
 #include <nucleus/device.h>
-#include <nucleus/context.h>
+#include <nucleus/runtime.h>
 #include <nucleus/array_1d.h>
 #include <nucleus/array_2d.h>
 #include <nucleus/array_3d.h>
@@ -48,9 +48,9 @@ __global__ void test_kernel()
 }
 
 
-void stream_test()
+void test_stream()
 {
-	auto device = ns::Context::getInstance()->device(0);
+	auto device = ns::Runtime::device(0);
 	auto allocator = device->defaultAllocator();
 	auto & stream = device->defaultStream();
 

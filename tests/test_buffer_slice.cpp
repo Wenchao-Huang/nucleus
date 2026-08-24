@@ -20,23 +20,33 @@
  *	SOFTWARE.
  */
 
-#include <nucleus/context.h>
+#include <nucleus/device.h>
+#include <nucleus/runtime.h>
+#include <nucleus/buffer_slice.h>
 
-/*********************************************************************************
-*******************************    context_test    *******************************
-*********************************************************************************/
+ /*********************************************************************************
+ ****************************    test_buffer_slice    *****************************
+ *********************************************************************************/
 
-void context_test()
+void test_buffer_slice()
 {
-	assert(ns::Version(10, 2) < ns::Version(10, 3));
-	assert(ns::Version(10, 4) > ns::Version(10, 3));
-	assert(ns::Version(10, 5) == ns::Version(10, 5));
-	assert(ns::Version(10, 5) >= ns::Version(10, 5));
-	assert(ns::Version(10, 5) <= ns::Version(10, 5));
+	auto device = ns::Runtime::device(0);
+	auto allocator = device->defaultAllocator();
+	ns::Buffer buffer(allocator, sizeof(int) * 1024);
 
-	auto context = ns::Context::getInstance();
-	auto driverVersion = context->driverVersion();
-	auto runtimVersion = context->runtimeVersion();
-	auto devices = context->getDevices();
-	auto device = context->device(0);
+	ns::BufferSlice<int> bufferSlice0;
+	ns::BufferSlice<int> bufferSlice1 = nullptr;
+	ns::BufferSlice<int> bufferSlice2(buffer);
+	ns::BufferSlice<int> bufferSlice3(buffer, 0, sizeof(int) * 10);
+	ns::BufferSlice<int> bufferSlice3b = bufferSlice3.subslice(0, 5);
+
+	ns::BufferSlice2D<int> bufferSlice4;
+	ns::BufferSlice2D<int> bufferSlice5 = nullptr;
+
+	ns::BufferSlice3D<int> bufferSlice6;
+	ns::BufferSlice3D<int> bufferSlice7 = nullptr;
+
+	ns::slice_cast<int>(bufferSlice0);
+	ns::slice_cast<float>(bufferSlice4);
+	ns::slice_cast<unsigned int>(bufferSlice6);
 }

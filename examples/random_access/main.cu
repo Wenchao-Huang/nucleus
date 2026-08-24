@@ -28,7 +28,7 @@
 
 #include <nucleus/device.h>
 #include <nucleus/stream.h>
-#include <nucleus/context.h>
+#include <nucleus/runtime.h>
 #include <nucleus/array_1d.h>
 #include <nucleus/allocator.h>
 #include <nucleus/scoped_timer.h>
@@ -48,7 +48,7 @@ template<typename Type> std::string to_string_aligned(Type value, int align)
 }
 
 
-template<typename Type> __global__ void indexed_copy(dev::Ptr<Type> outputs, dev::Ptr<const Type> inputs, dev::Ptr<const int> indices, int count)
+template<typename Type> __global__ void indexed_copy(dev::Span<Type> outputs, dev::Span<const Type> inputs, dev::Span<const int> indices, int count)
 {
 	CUDA_for(i, count);
 
@@ -58,7 +58,7 @@ template<typename Type> __global__ void indexed_copy(dev::Ptr<Type> outputs, dev
 
 int main()
 {
-	auto device = ns::Context::getInstance()->device(0);
+	auto device = ns::Runtime::device(0);
 	auto allocator = device->defaultAllocator();
 	auto & stream = device->defaultStream();
 

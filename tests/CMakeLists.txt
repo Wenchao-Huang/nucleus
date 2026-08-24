@@ -1,4 +1,4 @@
-﻿# Copyright (c) 2025 Wenchao Huang <physhuangwenchao@gmail.com>
+# Copyright (c) 2025 Wenchao Huang <physhuangwenchao@gmail.com>
 # 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -31,17 +31,23 @@ file(GLOB TEST_CUDA_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cu"
 add_executable(${TARGET_NAME} ${TEST_CPP_SOURCES} ${TEST_CUDA_SOURCES})
 
 # Link directories
-target_link_libraries(${TARGET_NAME} PRIVATE nucleus)
+target_link_libraries(${TARGET_NAME} PRIVATE Nucleus::nucleus)
 
 # MSVC settings
 if(MSVC)
-    target_compile_options(${TARGET_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/MP /W3 /WX /utf-8>)
+	target_compile_options(${TARGET_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/MP /W3 /WX /utf-8>)
 endif()
+
+# NVCC flags
+target_compile_options(${TARGET_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
+
+# Add test
+add_test(NAME ${TARGET_NAME} COMMAND ${TARGET_NAME})
 
 # CMake properties
 set_target_properties(${TARGET_NAME} PROPERTIES
-    CUDA_RESOLVE_DEVICE_SYMBOLS ON
-    CUDA_SEPARABLE_COMPILATION ON
-    CUDA_ARCHITECTURES "75"
-    FOLDER "Tests"
+	CUDA_RESOLVE_DEVICE_SYMBOLS ON
+	CUDA_SEPARABLE_COMPILATION ON
+	CUDA_ARCHITECTURES "75"
+	FOLDER "Tests"
 )

@@ -20,19 +20,17 @@
  *	SOFTWARE.
  */
 
-#include <nucleus/device.h>
-#include <nucleus/context.h>
+#include <string_view>
+#include <nucleus/version.h>
 
 /*********************************************************************************
-*******************************    device_test    ********************************
+*******************************    test_version    *******************************
 *********************************************************************************/
 
-void device_test()
-{
-	auto device = ns::Context::getInstance()->device(0);
-
-	device->init();
-	device->properties();
-	device->freeMemorySize();
-	device->sync();
-}
+static_assert(ns::Version() == ns::Version{ 0, 0, 0 });
+static_assert(ns::Version{ 10, 2, 0 } < ns::Version{ 10, 3, 1 });
+static_assert(ns::Version{ 10, 4, 2 } > ns::Version{ 10, 3, 0 });
+static_assert(ns::Version{ 10, 5, 5 } == ns::Version{ 10, 5, 5 });
+static_assert(ns::Version{ 10, 5, 3 } >= ns::Version{ 10, 5, 2 });
+static_assert(ns::Version{ 10, 5, 0 } <= ns::Version{ 10, 5, 1 });
+static_assert(ns::VERSION == ns::Version{ NS_VERSION_MAJOR, NS_VERSION_MINOR, NS_VERSION_PATCH });

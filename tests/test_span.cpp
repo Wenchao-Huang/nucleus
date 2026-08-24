@@ -20,33 +20,24 @@
  *	SOFTWARE.
  */
 
-#include <nucleus/device.h>
-#include <nucleus/context.h>
-#include <nucleus/buffer_view.h>
+#include <nucleus/span.h>
 
- /*********************************************************************************
- *****************************    buffer_view_test    *****************************
- *********************************************************************************/
+/*********************************************************************************
+********************************    test_span    *********************************
+*********************************************************************************/
 
-void buffer_view_test()
+void test_span()
 {
-	auto device = ns::Context::getInstance()->device(0);
-	auto allocator = device->defaultAllocator();
-	auto buffer = std::make_shared<ns::Buffer>(allocator, sizeof(int) * 1024);
+	//!	Test that `ns::Span` is compatible with `std::span`
+	static_assert(std::is_same_v<ns::Span<int>, std::span<int>>);
+	static_assert(std::is_base_of_v<std::span<const int>, ns::Span<const int>>);
 
-	ns::BufferView<int> bufferView0;
-	ns::BufferView<int> bufferView1 = nullptr;
-	ns::BufferView<int> bufferView2(buffer);
-	ns::BufferView<int> bufferView3(buffer, 0, sizeof(int) * 10);
-	ns::BufferView<int> bufferView3b = bufferView3.subview(0, 5);
+	//!	Test that `ns::Span` can be constructed from an initializer list
+	ns::Span<const int> aa = { 1, 2, 3, 4 };
 
-	ns::BufferView2D<int> bufferView4;
-	ns::BufferView2D<int> bufferView5 = nullptr;
+	//!	Test that `ns::Span` can be constructed from a `std::span`
+	std::span<const int> bb = aa;
 
-	ns::BufferView3D<int> bufferView6;
-	ns::BufferView3D<int> bufferView7 = nullptr;
-
-	ns::view_cast<int>(bufferView0);
-	ns::view_cast<float>(bufferView4);
-	ns::view_cast<unsigned int>(bufferView6);
+	//!	Test that `ns::Span` can be constructed from a `std::span`
+	ns::Span<const int> cc = bb;
 }

@@ -22,24 +22,24 @@
 
 #include <vector>
 #include <nucleus/device.h>
-#include <nucleus/context.h>
+#include <nucleus/runtime.h>
 #include <nucleus/array_1d.h>
 #include <nucleus/array_2d.h>
 #include <nucleus/array_3d.h>
 
 /*********************************************************************************
-********************************    array_test    ********************************
+********************************    test_array    ********************************
 *********************************************************************************/
 
-static void test(dev::Ptr<int> a, dev::Ptr2<const float> b, dev::Ptr3<float> c)
+static void test(dev::Span<int> a, dev::Ptr2<const float> b, dev::Ptr3<float> c)
 {
 
 }
 
 
-void array_test()
+void test_array()
 {
-	auto device = ns::Context::getInstance()->device(0);
+	auto device = ns::Runtime::device(0);
 	auto allocator = device->defaultAllocator();
 
 	ns::Array<int>		array0;
@@ -54,6 +54,10 @@ void array_test()
 	ns::Array3D<float>	array5(allocator, 100, 100, 100);
 	ns::Array3D<float>	array55 = std::move(array5);
 
+	ns::Array<int>		array1Default(100);
+	ns::Array2D<int>	array2Default(100, 100);
+	ns::Array3D<int>	array3Default(100, 100, 100);
+
 	std::vector<ns::Array<int>>		arrArray0;
 	std::vector<ns::Array<int>>		arrArray1(200);
 
@@ -64,20 +68,21 @@ void array_test()
 	assert(array1.empty());
 	assert(!array11.empty());
 	assert(arrArray1[0].size() == 10);
+	assert(array1Default.allocator() == ns::Runtime::defaultAllocator());
+	assert(array2Default.allocator() == ns::Runtime::defaultAllocator());
+	assert(array3Default.allocator() == ns::Runtime::defaultAllocator());
 
 	if (!array11.empty())
 	{
 		assert(array11.size() == 100);
-		assert(array11.width() == 100);
-		assert(array11.bytes() == 100 * sizeof(int));
-		assert(array11.pitch() == 100 * sizeof(int));
-		assert(array11.releaseBuffer() != nullptr);
+		assert(array11.size_bytes() == 100 * sizeof(int));
+		assert(!array11.releaseBuffer().empty());
 		assert(array11.allocator() == nullptr);
 		array11.resize(allocator, 200);
 		array11.resize(300);
 		array11.resize(300);
 		array11.clear();
-		array11.ptr();
+		array11.span();
 		assert(array11.data() == nullptr);
 	}
 
@@ -91,7 +96,7 @@ void array_test()
 		assert(array33.pitch() == 100 * sizeof(float));
 		assert(array33.height() == 100);
 		assert(array33.allocator() == allocator);
-		assert(array33.releaseBuffer() != nullptr);
+		assert(!array33.releaseBuffer().empty());
 		array33.resize(allocator, 200, 400);
 		array33.reshape(100, 800);
 		array33.resize(400, 200);

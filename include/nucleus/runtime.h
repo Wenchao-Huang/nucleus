@@ -22,38 +22,38 @@
 #pragma once
 
 #include "fwd.h"
-#include "host_types.h"
+#include "version.h"
 #include <vector>
 
 namespace NS_NAMESPACE
 {
 	/*****************************************************************************
-	*******************************    Context    ********************************
+	*******************************    Runtime    ********************************
 	*****************************************************************************/
 
 	/**
-	 *	@brief		Wrapper for CUDA context object (singleton).
+	 *	@brief		Wrapper for CUDA runtime object (singleton).
 	 */
-	class Context
+	class Runtime
 	{
-		NS_NONCOPYABLE(Context)
+		NS_NONCOPYABLE(Runtime)
 
 	private:
 
-		//!	@brief		Create CUDA context wrapper.
-		NS_API Context();
+		//!	@brief		Create CUDA runtime wrapper.
+		NS_API Runtime();
 
-		//!	@brief		Destroy CUDA context wrapper.
-		NS_API ~Context();
+		//!	@brief		Destroy CUDA runtime wrapper.
+		NS_API ~Runtime();
 
 	public:
 
 		/**
-		 *	@brief		Return a raw pointer to the CUDA context wrapper (singleton).
+		 *	@brief		Return a raw pointer to the CUDA runtime wrapper (singleton).
 		 */
-		static Context * getInstance()
+		static Runtime * getInstance()
 		{
-			static Context s_instance;
+			static Runtime s_instance;
 
 			return &s_instance;
 		}
@@ -72,44 +72,59 @@ namespace NS_NAMESPACE
 		 *	@brief		Return a string containing the name of an error code in the enum.
 		 *	@note		If the error code is not recognized, "unrecognized error code" is returned.
 		 */
-		NS_API static const char * getErrorName(Error_t eValue) noexcept;
+		NS_API static const char * getErrorName(Error_t err) noexcept;
 
 
 		/**
 		 *	@brief		Return the description string for an error code.
 		 *	@note		If the error code is not recognized, "unrecognized error code" is returned.
 		 */
-		NS_API static const char * getErrorString(Error_t eValue) noexcept;
+		NS_API static const char * getErrorString(Error_t err) noexcept;
 
 	public:
 
 		/**
-		 *	@brief		Return the latest version of CUDA supported by the driver.
+		 *	@brief		Return the version number of the current CUDA Runtime instance.
 		 */
-		Version driverVersion() const { return m_driverVersion; }
+		static Version version() { return Runtime::getInstance()->m_runtimeVersion; }
 
 
 		/**
-		 *	@brief		Return the version number of the current CUDA Runtime instance.
+		 *	@brief		Return the latest version of CUDA supported by the driver.
 		 */
-		Version runtimeVersion() const { return m_runtimeVersion; }
+		static Version driverVersion() { return Runtime::getInstance()->m_driverVersion; }
 
 
 		/**
 		 *	@brief		Return pointer to physical device.
 		 */
-		Device * device(size_t index) const { return m_cudaDevices[index]; }
+		static Device * device(size_t index) { return Runtime::getInstance()->m_cudaDevices[index]; }
 
 
 		/**
 		 *	@brief		Return physical device array.
 		 */
-		const std::vector<Device*> & getDevices() const { return m_cudaDevices; }
+		static const std::vector<Device*> & devices() { return Runtime::getInstance()->m_cudaDevices; }
+
+
+		/**
+		 *	@brief		Return constant reference of the default device allocator.
+		 *	@note		The default device allocator is used for allocating device memory when no allocator is specified.
+		 *	@note		The default device allocator is initialized to the default allocator of the first device.
+		 */
+		static const std::shared_ptr<DeviceAllocator> & defaultAllocator() { return Runtime::getInstance()->m_defaultAlloc; }
+
+
+		/**
+		 *	@brief		Set the default device allocator.
+		 */
+		static void setDefaultAllocator(std::shared_ptr<DeviceAllocator> alloc) { Runtime::getInstance()->m_defaultAlloc = alloc; }
 
 	private:
 
-		Version						m_driverVersion;
-		Version						m_runtimeVersion;
-		std::vector<Device*>		m_cudaDevices;
+		Version									m_driverVersion;
+		Version									m_runtimeVersion;
+		std::vector<Device*>					m_cudaDevices;
+		std::shared_ptr<DeviceAllocator>		m_defaultAlloc;
 	};
 }
